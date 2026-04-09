@@ -1,5 +1,10 @@
 # MagicBytes
 
+[![CI](https://github.com/leftstanding/magic_bytes/actions/workflows/ci.yml/badge.svg)](https://github.com/leftstanding/magic_bytes/actions/workflows/ci.yml)
+[![Hex Version](https://img.shields.io/hexpm/v/magic_bytes.svg)](https://hex.pm/packages/magic_bytes)
+[![Hex Downloads](https://img.shields.io/hexpm/dt/magic_bytes.svg)](https://hex.pm/packages/magic_bytes)
+[![License](https://img.shields.io/hexpm/l/magic_bytes.svg)](https://github.com/leftstanding/magic_bytes/blob/main/LICENSE)
+
 Detects MIME types from binary content using magic byte signatures. Only the
 first 16 bytes of input are required, making resolution fast regardless of
 file size.
