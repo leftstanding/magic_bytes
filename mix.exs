@@ -25,14 +25,16 @@ defmodule MagicBytes.MixProject do
   defp package do
     [
       licenses: ["GPL-3.0-only"],
-      links: %{}
+      links: %{"GitHub" => "https://github.com/leftstanding/magic_bytes"},
+      files: ~w(lib mix.exs README.md CHANGELOG.md LICENSE)
     ]
   end
 
   defp docs do
     [
       main: "MagicBytes",
-      extras: ["README.md"]
+      source_url: "https://github.com/leftstanding/magic_bytes",
+      extras: ["README.md", "CHANGELOG.md"]
     ]
   end
 
