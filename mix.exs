@@ -5,7 +5,7 @@ defmodule MagicBytes.MixProject do
     [
       app: :magic_bytes,
       version: "0.1.0",
-      elixir: "~> 1.16",
+      elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
       description: "Detect MIME types from binary content using magic byte signatures.",
