@@ -24,7 +24,7 @@ defmodule MagicBytes.MixProject do
 
   defp package do
     [
-      licenses: ["GPL-3.0-only"],
+      licenses: ["Apache-2.0"],
       links: %{"GitHub" => "https://github.com/leftstanding/magic_bytes"},
       files: ~w(lib mix.exs README.md CHANGELOG.md LICENSE)
     ]
