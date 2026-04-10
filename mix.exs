@@ -5,7 +5,7 @@ defmodule MagicBytes.MixProject do
     [
       app: :magic_bytes,
       version: "0.1.0",
-      elixir: "~> 1.18",
+      elixir: "~> 1.16",
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
       description: "Detect MIME types from binary content using magic byte signatures.",
@@ -24,7 +24,7 @@ defmodule MagicBytes.MixProject do
 
   defp package do
     [
-      licenses: ["GPL-3.0-only"],
+      licenses: ["Apache-2.0"],
       links: %{"GitHub" => "https://github.com/leftstanding/magic_bytes"},
       files: ~w(lib mix.exs README.md CHANGELOG.md LICENSE)
     ]

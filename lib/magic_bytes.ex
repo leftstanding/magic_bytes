@@ -46,12 +46,15 @@ defmodule MagicBytes do
   | Database   | `application/x-sqlite3` |
   """
 
+  require MagicBytes.DefineSignatures
   require MagicBytes.FileSignatures
 
   alias MagicBytes.FileSignatures
 
   @type mime_type :: String.t()
   @type error :: {:error, :unreadable | :unknown}
+
+  MagicBytes.DefineSignatures.generate_guards(MagicBytes.FileSignatures)
 
   @doc """
   Detects the MIME type of the file at `path` by reading its first 16 bytes.
@@ -137,16 +140,5 @@ defmodule MagicBytes do
       <<>> -> {:error, :unreadable}
       data -> FileSignatures.match(data)
     end
-  end
-
-  # Generate guard_clauses.
-  for {mime, prefix} <- MagicBytes.FileSignatures.signatures() |> Enum.uniq_by(&elem(&1, 0)) do
-    guard_name = :"is_#{String.replace(mime, ~r/[^a-zA-Z0-9]+/, "_") |> String.downcase()}"
-    prefix_size = byte_size(prefix)
-
-    defguard unquote(guard_name)(bin)
-             when is_binary(bin) and
-                    byte_size(bin) >= unquote(prefix_size) and
-                    binary_part(bin, 0, unquote(prefix_size)) == unquote(prefix)
   end
 end
