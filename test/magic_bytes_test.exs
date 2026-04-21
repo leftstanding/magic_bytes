@@ -27,4 +27,53 @@ defmodule MagicBytesTest do
     assert MagicBytes.is_image_jpeg(<<0xFF, 0xD8, 0xFF, 0xE0>>)
     refute MagicBytes.is_image_jpeg(<<0x89, "PNG", 0x0D, 0x0A, 0x1A, 0x0A>>)
   end
+
+  describe "custom DefineSignatures" do
+    defmodule LocalSigs do
+      use MagicBytes.DefineSignatures
+      defsignature("application/x-local", <<0xAB, 0xCD, 0xEF, 0x00>>)
+    end
+
+    test "match/1 returns successfully for a defined prefix" do
+      assert LocalSigs.match(<<0xAB, 0xCD, 0xEF, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>>) ==
+               {:ok, "application/x-local"}
+    end
+
+    test "match/1 returns unknown for an unregistered prefix" do
+      assert LocalSigs.match(<<0xFF, 0xD8, 0xFF, 0xE0>>) == {:error, :unknown}
+    end
+
+    test "signatures/0 lists all defined signatures" do
+      assert LocalSigs.signatures() == [{"application/x-local", <<0xAB, 0xCD, 0xEF, 0x00>>}]
+    end
+  end
+
+  # MagicBytes.Test.ExtraSignatures is configured via config/test.exs:
+  # config :magic_bytes, extra_signatures: MagicBytes.Test.ExtraSignatures
+  # It registers: defsignature("application/x-custom", <<0xDE, 0xAD, 0xC0, 0xDE>>)
+  describe "extra_signatures config" do
+    @custom <<0xDE, 0xAD, 0xC0, 0xDE, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>>
+
+    test "from_binary resolves custom mime" do
+      assert MagicBytes.from_binary(@custom) == {:ok, "application/x-custom"}
+    end
+
+    test "from_stream resolves custom mime" do
+      assert MagicBytes.from_stream([@custom]) == {:ok, "application/x-custom"}
+    end
+
+    test "built-in signatures still resolve alongside custom" do
+      assert MagicBytes.from_binary(<<0xFF, 0xD8, 0xFF, 0xE0>>) == {:ok, "image/jpeg"}
+    end
+
+    test "unknown bytes still return error" do
+      assert MagicBytes.from_binary(<<0x00, 0x00, 0x00, 0x00>>) == {:error, :unknown}
+    end
+
+    test "guard is generated on the custom signatures module" do
+      require MagicBytes.Test.ExtraSignatures, as: ExtraSigs
+      assert ExtraSigs.is_application_x_custom(@custom)
+      refute ExtraSigs.is_application_x_custom(<<0xFF, 0xD8, 0xFF, 0xE0>>)
+    end
+  end
 end

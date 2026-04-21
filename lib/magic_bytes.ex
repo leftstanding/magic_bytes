@@ -30,6 +30,24 @@ defmodule MagicBytes do
   inspecting bytes beyond a fixed prefix (WebP, WAV, AVI, AIFF, MP4,
   HEIC, AVIF, QuickTime). Use `from_binary/1` for those.
 
+  ## Custom signatures
+
+  Define a module with `use MagicBytes.DefineSignatures`, then configure it:
+
+      defmodule MyApp.Signatures do
+        use MagicBytes.DefineSignatures, guards: true
+        defsignature("application/x-cld", <<0xCA, 0xFE, 0xD0, 0x0D>>)
+      end
+
+      # config/config.exs
+      config :magic_bytes, extra_signatures: MyApp.Signatures
+
+  All `from_*` functions will then check custom signatures first, falling
+  back to the built-ins. No call-site changes required.
+
+  Passing `guards: true` generates guard macros on your own module
+  (e.g. `MyApp.Signatures.is_application_x_cld/1`)
+
   ## Supported formats
 
   | Category   | MIME types |
@@ -54,6 +72,8 @@ defmodule MagicBytes do
   @type mime_type :: String.t()
   @type error :: {:error, :unreadable | :unknown}
 
+  @extra Application.compile_env(:magic_bytes, :extra_signatures, nil)
+
   MagicBytes.DefineSignatures.generate_guards(MagicBytes.FileSignatures)
 
   @doc """
@@ -76,7 +96,7 @@ defmodule MagicBytes do
   def from_path(path) do
     case File.open(path, [:read, :binary]) do
       {:ok, file} ->
-        result = file |> IO.binread(16) |> FileSignatures.match()
+        result = file |> IO.binread(16) |> do_match()
         File.close(file)
         result
 
@@ -109,7 +129,7 @@ defmodule MagicBytes do
       {:error, :unknown}
   """
   @spec from_binary(binary()) :: {:ok, mime_type()} | error()
-  def from_binary(data) when is_binary(data), do: FileSignatures.match(data)
+  def from_binary(data) when is_binary(data), do: do_match(data)
 
   @doc """
   Detects the MIME type from a stream of binaries.
@@ -136,9 +156,19 @@ defmodule MagicBytes do
       combined = acc <> chunk
       if byte_size(combined) >= 16, do: {:halt, combined}, else: {:cont, combined}
     end)
-    |> case do
-      <<>> -> {:error, :unreadable}
-      data -> FileSignatures.match(data)
+    |> do_match()
+  end
+
+  defp do_match(<<>>), do: {:error, :unreadable}
+
+  if @extra do
+    defp do_match(data) do
+      case @extra.match(data) do
+        {:error, :unknown} -> FileSignatures.match(data)
+        result -> result
+      end
     end
+  else
+    defp do_match(data), do: FileSignatures.match(data)
   end
 end
