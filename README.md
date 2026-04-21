@@ -88,6 +88,39 @@ Guards are not generated for container-format signatures where the
 distinguishing bytes appear at a non-zero offset (WebP, WAV, AVI, AIFF,
 MP4, HEIC, AVIF, QuickTime). Use `from_binary/1` for those formats.
 
+### Custom signatures
+
+Define a module with `use MagicBytes.DefineSignatures`, configure it once,
+and all `from_*` functions will check your signatures first, falling back to
+the built-ins automatically.
+
+```elixir
+defmodule MyApp.Signatures do
+  use MagicBytes.DefineSignatures, guards: true
+  defsignature("application/x-cld", <<0xCA, 0xFE, 0xD0, 0x0D>>)
+end
+```
+
+```elixir
+# config/config.exs
+config :magic_bytes, extra_signatures: MyApp.Signatures
+```
+
+```elixir
+MagicBytes.from_binary(<<0xCA, 0xFE, 0xD0, 0x0D, ...>>)
+#=> {:ok, "application/x-cld"}
+```
+
+Passing `guards: true` generates guard macros on your module. Because guards
+must be resolved at compile time and your module compiles after the
+`magic_bytes` dependency, they live on your module rather than on `MagicBytes`:
+
+```elixir
+require MyApp.Signatures
+
+def process(bin) when MyApp.Signatures.is_application_x_cld(bin), do: ...
+```
+
 ## Supported formats
 
 | Category    | MIME types                                                                                          |
