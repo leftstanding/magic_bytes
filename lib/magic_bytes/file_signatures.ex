@@ -10,6 +10,15 @@ defmodule MagicBytes.FileSignatures do
   defsignature("image/tiff", <<"MM", 0, 42>>)
   defsignature("image/x-icon", <<0, 0, 1, 0>>)
   defsignature("image/vnd.adobe.photoshop", <<"8BPS">>)
+  defsignature("image/jp2", <<0x00, 0x00, 0x00, 0x0C, 0x6A, 0x50, 0x20, 0x20>>)
+  defsignature("image/jxl", <<0xFF, 0x0A>>)
+
+  defsignature(
+    "image/jxl",
+    <<0x00, 0x00, 0x00, 0x0C, 0x4A, 0x58, 0x4C, 0x20, 0x0D, 0x0A, 0x87, 0x0A>>
+  )
+
+  defsignature("image/flif", <<"FLIF">>)
 
   # Audio/Video
   defsignature("video/x-matroska", <<0x1A, 0x45, 0xDF, 0xA3>>)
@@ -35,6 +44,11 @@ defmodule MagicBytes.FileSignatures do
   defsignature("application/x-bzip2", <<"BZh">>)
   defsignature("application/x-xz", <<0xFD, "7zXZ", 0x00>>)
   defsignature("application/zstd", <<0x28, 0xB5, 0x2F, 0xFD>>)
+  defsignature("application/x-lz4", <<0x04, 0x22, 0x4D, 0x18>>)
+
+  # Data formats
+  defsignature("application/vnd.apache.parquet", <<"PAR1">>)
+  defsignature("application/vnd.apache.arrow.file", <<"ARROW1", 0x00, 0x00>>)
 
   # Executables & Bytecode
   defsignature("application/x-elf", <<0x7F, "ELF">>)
@@ -45,6 +59,7 @@ defmodule MagicBytes.FileSignatures do
   defsignature("application/x-mach-binary", <<0xCF, 0xFA, 0xED, 0xFE>>)
   defsignature("application/x-mach-binary", <<0xCA, 0xFE, 0xBA, 0xBE>>)
   defsignature("application/wasm", <<0x00, 0x61, 0x73, 0x6D>>)
+  defsignature("application/vnd.android.dex", <<"dex\n">>)
 
   # Fonts
   defsignature("font/woff", <<"wOFF">>)

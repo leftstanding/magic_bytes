@@ -28,13 +28,23 @@ defmodule MagicBytesTest do
     refute MagicBytes.is_image_jpeg(<<0x89, "PNG", 0x0D, 0x0A, 0x1A, 0x0A>>)
   end
 
-  describe "custom DefineSignatures" do
+  test "image/jxl bare codestream" do
+    assert MagicBytes.from_binary(<<0xFF, 0x0A, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>>) ==
+             {:ok, "image/jxl"}
+  end
+
+  test "application/vnd.android.dex" do
+    assert MagicBytes.from_binary(<<"dex\n035\0", 0, 0, 0, 0, 0, 0, 0, 0>>) ==
+             {:ok, "application/vnd.android.dex"}
+  end
+
+  describe "DefineSignatures" do
     defmodule LocalSigs do
       use MagicBytes.DefineSignatures
       defsignature("application/x-local", <<0xAB, 0xCD, 0xEF, 0x00>>)
     end
 
-    test "match/1 returns successfully for a defined prefix" do
+    test "match/1 returns ok for a defined prefix" do
       assert LocalSigs.match(<<0xAB, 0xCD, 0xEF, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>>) ==
                {:ok, "application/x-local"}
     end
@@ -46,11 +56,16 @@ defmodule MagicBytesTest do
     test "signatures/0 lists all defined signatures" do
       assert LocalSigs.signatures() == [{"application/x-local", <<0xAB, 0xCD, 0xEF, 0x00>>}]
     end
+
+    test "required_bytes/0 returns the max bytes needed" do
+      assert LocalSigs.required_bytes() == 4
+    end
   end
 
   # MagicBytes.Test.ExtraSignatures is configured via config/test.exs:
-  # config :magic_bytes, extra_signatures: MagicBytes.Test.ExtraSignatures
-  # It registers: defsignature("application/x-custom", <<0xDE, 0xAD, 0xC0, 0xDE>>)
+  #   config :magic_bytes, extra_signatures: MagicBytes.Test.ExtraSignatures
+  # It registers:
+  #   defsignature("application/x-custom", <<0xDE, 0xAD, 0xC0, 0xDE>>)
   describe "extra_signatures config" do
     @custom <<0xDE, 0xAD, 0xC0, 0xDE, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>>
 
