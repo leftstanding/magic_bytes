@@ -17,9 +17,12 @@ defmodule MagicBytes.DefineSignatures do
     do: quote(do: @signatures({unquote(mime), unquote(prefix)}))
 
   defmacro __before_compile__(env) do
-    signatures = env.module |> Module.get_attribute(:signatures)
+    signatures = Module.get_attribute(env.module, :signatures)
 
-    uniq = signatures |> Enum.uniq_by(fn {mime, _prefix} -> mime_to_guard_name(mime) end)
+    uniq = Enum.uniq_by(signatures, fn {mime, _} -> mime_to_guard_name(mime) end)
+
+    required_bytes =
+      signatures |> Enum.map(fn {_, p} -> byte_size(p) end) |> Enum.max(fn -> 0 end)
 
     match_clauses =
       for {mime, prefix} <- signatures do
@@ -30,17 +33,13 @@ defmodule MagicBytes.DefineSignatures do
 
     guard_clauses =
       case Module.get_attribute(env.module, :magic_bytes_generate_guards) do
-        true ->
-          for {mime, prefix} <- uniq do
-            build_guard(mime, prefix)
-          end
-
-        _ ->
-          []
+        true -> for {mime, prefix} <- uniq, do: build_guard(mime, prefix)
+        _ -> []
       end
 
     quote do
       def signatures, do: unquote(Macro.escape(signatures))
+      def required_bytes, do: unquote(required_bytes)
 
       unquote_splicing(guard_clauses)
       unquote_splicing(match_clauses)
@@ -51,9 +50,11 @@ defmodule MagicBytes.DefineSignatures do
 
   defmacro generate_guards(module) do
     module = Macro.expand(module, __CALLER__)
-    sigs = module.signatures()
-    uniq = Enum.uniq_by(sigs, fn {mime, _prefix} -> mime_to_guard_name(mime) end)
-    guard_clauses = for {mime, prefix} <- uniq, do: build_guard(mime, prefix)
+
+    guard_clauses =
+      module.signatures()
+      |> Enum.uniq_by(fn {mime, _} -> mime_to_guard_name(mime) end)
+      |> Enum.map(fn {mime, prefix} -> build_guard(mime, prefix) end)
 
     quote do
       (unquote_splicing(guard_clauses))

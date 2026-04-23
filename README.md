@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/hexpm/l/magic_bytes.svg)](https://github.com/leftstanding/magic_bytes/blob/main/LICENSE)
 
 Detects MIME types from binary content using magic byte signatures. Only the
-first 16 bytes of input are required, making resolution fast regardless of
+leading bytes of a file are examined, making detection fast regardless of
 file size.
 
 ## Installation
@@ -14,7 +14,7 @@ file size.
 ```elixir
 def deps do
   [
-    {:magic_bytes, "~> 0.1.0"}
+    {:magic_bytes, "~> 0.2"}
   ]
 end
 ```
@@ -53,7 +53,7 @@ MagicBytes.from_binary(<<0x00, 0x00, 0x00, 0x00>>)
 
 ### From a stream
 
-Chunks are accumulated until the required 16 bytes are accumulated and run.
+Chunks are accumulated until enough bytes are available, then detection runs.
 The stream is not fully consumed.
 
 ```elixir
@@ -65,7 +65,7 @@ File.stream!("video.mkv", 1024)
 ### Guards
 
 For prefix-based signatures a corresponding guard macro is generated and
-re-exported from `MagicBytes`. Guard names follow the pattern
+exported from `MagicBytes`. Guard names follow the pattern
 `is_<mime_type>` with `/` and `-` replaced by `_`.
 
 ```elixir
@@ -85,7 +85,7 @@ MagicBytes.is_application_gzip(data)  #=> true | false
 ```
 
 Guards are not generated for container-format signatures where the
-distinguishing bytes appear at a non-zero offset (WebP, WAV, AVI, AIFF,
+distinguishing bytes appear beyond a fixed prefix (WebP, WAV, AVI, AIFF,
 MP4, HEIC, AVIF, QuickTime). Use `from_binary/1` for those formats.
 
 ### Custom signatures
@@ -97,39 +97,67 @@ the built-ins automatically.
 ```elixir
 defmodule MyApp.Signatures do
   use MagicBytes.DefineSignatures, guards: true
+
+  # Prefix-based: magic bytes at offset 0
   defsignature("application/x-cld", <<0xCA, 0xFE, 0xD0, 0x0D>>)
+
+  # Offset-based: magic bytes at a specific byte offset
+  defsignature_at("application/x-tar", 257, "ustar")
 end
 ```
 
 ```elixir
 # config/config.exs
-config :magic_bytes, extra_signatures: MyApp.Signatures
+config :magic_bytes,
+  extra_signatures: MyApp.Signatures,
+  # Required when using offset-based signatures — set to offset + byte_size(magic)
+  read_bytes: 262
 ```
 
 ```elixir
-MagicBytes.from_binary(<<0xCA, 0xFE, 0xD0, 0x0D, ...>>)
-#=> {:ok, "application/x-cld"}
+MagicBytes.from_binary(data)
+#=> {:ok, "application/x-cld"}  # or any built-in type
 ```
 
-Passing `guards: true` generates guard macros on your module. Because guards
-must be resolved at compile time and your module compiles after the
-`magic_bytes` dependency, they live on your module rather than on `MagicBytes`:
+Passing `guards: true` generates guard macros on your module for both prefix
+and offset signatures. Because your module compiles after the `magic_bytes`
+dependency, guards live on your module rather than on `MagicBytes`:
 
 ```elixir
 require MyApp.Signatures
 
 def process(bin) when MyApp.Signatures.is_application_x_cld(bin), do: ...
+def process(bin) when MyApp.Signatures.is_application_x_tar(bin), do: ...
 ```
+
+### ZIP-based formats
+
+Formats that are ZIP files internally (`.docx`, `.xlsx`, `.odt`, etc.) are
+correctly detected as `application/zip`. Distinguishing between them requires
+parsing the ZIP structure, which is outside the scope of this library. Pair
+with a ZIP parser for sub-format detection if needed.
+
+## Configuration
+
+All options are resolved at compile time via `Application.compile_env`.
+
+| Key                  | Type           | Default | Description |
+|----------------------|----------------|---------|-------------|
+| `:extra_signatures`  | module         | `nil`   | Module with additional signatures defined via `use MagicBytes.DefineSignatures` |
+| `:read_bytes`        | pos_integer    | auto    | Bytes read from input. Defaults to the minimum required by the built-in signatures. Set explicitly when using offset-based custom signatures. |
+| `:only`              | list(string)   | `nil`   | When set, only these MIME types are returned; all others become `{:error, :unknown}` |
+| `:exclude`           | list(string)   | `[]`    | MIME types to suppress. Ignored when `:only` is set. |
 
 ## Supported formats
 
-| Category    | MIME types                                                                                          |
-|-------------|-----------------------------------------------------------------------------------------------------|
-| Images      | `image/jpeg` `image/png` `image/gif` `image/webp` `image/bmp` `image/tiff` `image/x-icon` `image/vnd.adobe.photoshop` `image/heic` `image/avif` |
-| Audio       | `audio/mpeg` `audio/flac` `audio/ogg` `audio/wav` `audio/aiff` `audio/mp4`                        |
-| Video       | `video/mp4` `video/quicktime` `video/x-matroska` `video/x-flv` `video/x-msvideo`                  |
-| Documents   | `application/pdf` `application/zip` `application/x-cfb` `application/rtf`                          |
-| Archives    | `application/x-rar-compressed` `application/x-7z-compressed` `application/gzip` `application/x-bzip2` `application/x-xz` `application/zstd` |
-| Executables | `application/x-elf` `application/x-msdownload` `application/x-mach-binary` `application/wasm`     |
-| Fonts       | `font/woff` `font/woff2` `font/otf` `font/ttf`                                                     |
-| Database    | `application/x-sqlite3`                                                                             |
+| Category    | MIME types |
+|-------------|------------|
+| Images      | `image/jpeg` `image/png` `image/gif` `image/webp` `image/bmp` `image/tiff` `image/x-icon` `image/vnd.adobe.photoshop` `image/heic` `image/avif` `image/jp2` `image/jxl` `image/flif` |
+| Audio       | `audio/mpeg` `audio/flac` `audio/ogg` `audio/wav` `audio/aiff` `audio/mp4` |
+| Video       | `video/mp4` `video/quicktime` `video/x-matroska` `video/x-flv` `video/x-msvideo` |
+| Documents   | `application/pdf` `application/zip` `application/x-cfb` `application/rtf` |
+| Archives    | `application/x-rar-compressed` `application/x-7z-compressed` `application/gzip` `application/x-bzip2` `application/x-xz` `application/zstd` `application/x-lz4` |
+| Data        | `application/vnd.apache.parquet` `application/vnd.apache.arrow.file` |
+| Executables | `application/x-elf` `application/x-msdownload` `application/x-mach-binary` `application/wasm` `application/vnd.android.dex` |
+| Fonts       | `font/woff` `font/woff2` `font/otf` `font/ttf` |
+| Database    | `application/x-sqlite3` |
