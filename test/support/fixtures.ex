@@ -17,6 +17,9 @@ defmodule MagicBytes.Test.Fixtures do
     {"fixture.psd", "image/vnd.adobe.photoshop"},
     {"fixture-heic.heic", "image/heic"},
     {"fixture-yuv420-8bit.avif", "image/avif"},
+    {"fixture.jp2", "image/jp2"},
+    {"fixture.jxl", "image/jxl"},
+    {"fixture.flif", "image/flif"},
     # Audio/Video
     {"fixture.wav", "audio/wav"},
     {"fixture.avi", "video/x-msvideo"},
@@ -39,6 +42,10 @@ defmodule MagicBytes.Test.Fixtures do
     {"fixture.bz2", "application/x-bzip2"},
     {"fixture.tar.xz", "application/x-xz"},
     {"fixture.tar.zst", "application/zstd"},
+    {"fixture.lz4", "application/x-lz4"},
+    # Data
+    {"fixture.parquet", "application/vnd.apache.parquet"},
+    {"fixture.arrow", "application/vnd.apache.arrow.file"},
     # Executables & Bytecode
     {"fixture.elf", "application/x-elf"},
     {"fixture.exe", "application/x-msdownload"},
