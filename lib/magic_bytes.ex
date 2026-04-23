@@ -2,8 +2,10 @@ defmodule MagicBytes do
   @moduledoc """
   Detect MIME types from binary content using magic byte signatures.
 
-  Only the first 16 bytes of input are examined. Three entry points cover
-  the common cases — file path, raw binary, and streaming data:
+  Only the required bytes to discern the signature are used, seperating performance
+  from file size. The default size is 16 bytes which satisfies the majority of file types.
+  The first `#{Application.compile_env(:magic_bytes, :read_bytes, 16)}` bytes of input are
+  examined (configurable — see below).
 
       iex> MagicBytes.from_binary(<<0xFF, 0xD8, 0xFF, 0xE0>>)
       {:ok, "image/jpeg"}
@@ -32,36 +34,53 @@ defmodule MagicBytes do
 
   ## Custom signatures
 
-  Define a module with `use MagicBytes.DefineSignatures`, then configure it:
+  Define a module with `use MagicBytes.DefineSignatures`, configure it once,
+  and all `from_*` functions will check your signatures first, falling back to
+  the built-ins automatically.
 
       defmodule MyApp.Signatures do
         use MagicBytes.DefineSignatures, guards: true
         defsignature("application/x-cld", <<0xCA, 0xFE, 0xD0, 0x0D>>)
+        defsignature_at("application/x-tar", 257, "ustar")
       end
 
       # config/config.exs
-      config :magic_bytes, extra_signatures: MyApp.Signatures
+      config :magic_bytes,
+        extra_signatures: MyApp.Signatures,
+        read_bytes: 262  # must cover the largest offset + size in your signatures
 
-  All `from_*` functions will then check custom signatures first, falling
-  back to the built-ins. No call-site changes required.
+  Passing `guards: true` generates guard macros on your module
+  (e.g. `MyApp.Signatures.is_application_x_cld/1`, `MyApp.Signatures.is_application_x_tar/1`)
+  that can be used in `when` clauses after `require MyApp.Signatures`.
 
-  Passing `guards: true` generates guard macros on your own module
-  (e.g. `MyApp.Signatures.is_application_x_cld/1`)
+  ## Configuration
+
+  Set in `config/config.exs` (values are resolved at compile time):
+
+  | Key                | Type          | Default | Description |
+  |--------------------|---------------|---------|-------------|
+  | `:extra_signatures`| module        | `nil`   | Module with additional signatures |
+  | `:read_bytes`      | pos_integer   | auto    | Bytes read from input; defaults to the minimum required by the built-in signatures. Set explicitly when using offset-based custom signatures. |
+  | `:only`            | list(String)  | `nil`   | When set, only these MIME types are returned; others become `{:error, :unknown}` |
+  | `:exclude`         | list(String)  | `[]`    | MIME types to suppress; ignored when `:only` is set |
 
   ## Supported formats
 
-  | Category   | MIME types |
-  |------------|------------|
-  | Images     | `image/jpeg`, `image/png`, `image/gif`, `image/webp`, `image/bmp`,
-  |              `image/tiff`, `image/x-icon`, `image/vnd.adobe.photoshop`, `image/heic`, `image/avif` |
-  | Audio      | `audio/mpeg`, `audio/flac`, `audio/ogg`, `audio/wav`, `audio/aiff`, `audio/mp4` |
-  | Video      | `video/mp4`, `video/quicktime`, `video/x-matroska`, `video/x-flv`, `video/x-msvideo` |
-  | Documents  | `application/pdf`, `application/zip`, `application/x-cfb`, `application/rtf` |
-  | Archives   | `application/x-rar-compressed`, `application/x-7z-compressed`, `application/gzip`,
-  |            | `application/x-bzip2`, `application/x-xz`, `application/zstd` |
-  | Executable | `application/x-elf`, `application/x-msdownload`, `application/x-mach-binary`, `application/wasm` |
-  | Fonts      | `font/woff`, `font/woff2`, `font/otf`, `font/ttf` |
-  | Database   | `application/x-sqlite3` |
+  | Category    | MIME types |
+  |-------------|------------|
+  | Images      | `image/jpeg`, `image/png`, `image/gif`, `image/webp`, `image/bmp`,
+  |               `image/tiff`, `image/x-icon`, `image/vnd.adobe.photoshop`,
+  |               `image/heic`, `image/avif`, `image/jp2`, `image/jxl`, `image/flif` |
+  | Audio       | `audio/mpeg`, `audio/flac`, `audio/ogg`, `audio/wav`, `audio/aiff`, `audio/mp4` |
+  | Video       | `video/mp4`, `video/quicktime`, `video/x-matroska`, `video/x-flv`, `video/x-msvideo` |
+  | Documents   | `application/pdf`, `application/zip`, `application/x-cfb`, `application/rtf` |
+  | Archives    | `application/x-rar-compressed`, `application/x-7z-compressed`, `application/gzip`,
+  |             | `application/x-bzip2`, `application/x-xz`, `application/zstd`, `application/x-lz4` |
+  | Data        | `application/vnd.apache.parquet`, `application/vnd.apache.arrow.file` |
+  | Executables | `application/x-elf`, `application/x-msdownload`, `application/x-mach-binary`,
+  |             | `application/wasm`, `application/vnd.android.dex` |
+  | Fonts       | `font/woff`, `font/woff2`, `font/otf`, `font/ttf` |
+  | Database    | `application/x-sqlite3` |
   """
 
   require MagicBytes.DefineSignatures
@@ -73,21 +92,27 @@ defmodule MagicBytes do
   @type error :: {:error, :unreadable | :unknown}
 
   @extra Application.compile_env(:magic_bytes, :extra_signatures, nil)
+  @only Application.compile_env(:magic_bytes, :only, nil)
+  @exclude Application.compile_env(:magic_bytes, :exclude, [])
+  @read_bytes Application.compile_env(:magic_bytes, :read_bytes, FileSignatures.required_bytes())
 
   MagicBytes.DefineSignatures.generate_guards(MagicBytes.FileSignatures)
 
   @doc """
-  Detects the MIME type of the file at `path` by reading its first 16 bytes.
+  Detects the MIME type of the file at `path` by reading its leading bytes.
 
   Returns `{:error, :unreadable}` if the file cannot be opened.
 
   ## Examples
 
-      iex> MagicBytes.from_binary("image_file.jpg")
-      iex> {:ok, "image/jpg"}
+      iex> MagicBytes.from_path("test/fixtures/fixture.jpg")
+      {:ok, "image/jpeg"}
 
-      iex> MagicBytes.from_binary("pdf_file.pdf")
-      iex> {:ok, "application/pdf"}
+      iex> MagicBytes.from_path("test/fixtures/fixture.png")
+      {:ok, "image/png"}
+
+      iex> MagicBytes.from_path("test/fixtures/fixture.pdf")
+      {:ok, "application/pdf"}
 
       iex> MagicBytes.from_path("/nonexistent/file.jpg")
       {:error, :unreadable}
@@ -96,7 +121,7 @@ defmodule MagicBytes do
   def from_path(path) do
     case File.open(path, [:read, :binary]) do
       {:ok, file} ->
-        result = file |> IO.binread(16) |> do_match()
+        result = file |> IO.binread(@read_bytes) |> do_match()
         File.close(file)
         result
 
@@ -108,7 +133,7 @@ defmodule MagicBytes do
   @doc """
   Detects the MIME type from a binary.
 
-  Only the first 16 bytes are examined; passing the full file content is
+  Only the leading bytes are examined; passing the full file content is
   fine but unnecessary.
 
   ## Examples
@@ -134,8 +159,8 @@ defmodule MagicBytes do
   @doc """
   Detects the MIME type from a stream of binaries.
 
-  Chunks are accumulated until at least 16 bytes are available, then
-  detection runs on the combined header. The stream is not fully consumed.
+  Chunks are accumulated until enough bytes are available, then detection
+  runs on the combined header. The stream is not fully consumed.
 
   Returns `{:error, :unreadable}` if the stream is empty.
 
@@ -154,7 +179,7 @@ defmodule MagicBytes do
   def from_stream(stream) do
     Enum.reduce_while(stream, <<>>, fn chunk, acc ->
       combined = acc <> chunk
-      if byte_size(combined) >= 16, do: {:halt, combined}, else: {:cont, combined}
+      if byte_size(combined) >= @read_bytes, do: {:halt, combined}, else: {:cont, combined}
     end)
     |> do_match()
   end
@@ -164,11 +189,23 @@ defmodule MagicBytes do
   if @extra do
     defp do_match(data) do
       case @extra.match(data) do
-        {:error, :unknown} -> FileSignatures.match(data)
-        result -> result
+        {:error, :unknown} -> data |> FileSignatures.match() |> filter_match()
+        result -> filter_match(result)
       end
     end
   else
-    defp do_match(data), do: FileSignatures.match(data)
+    defp do_match(data), do: data |> FileSignatures.match() |> filter_match()
+  end
+
+  if @only do
+    defp filter_match({:ok, mime}) when mime in @only, do: {:ok, mime}
+    defp filter_match({:ok, _mime}), do: {:error, :unknown}
+    defp filter_match(result), do: result
+  else
+    if @exclude != [] do
+      defp filter_match({:ok, mime}) when mime in @exclude, do: {:error, :unknown}
+    end
+
+    defp filter_match(result), do: result
   end
 end
