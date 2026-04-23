@@ -1,9 +1,12 @@
 defmodule MagicBytes.DefineSignatures do
   @moduledoc false
 
-  defmacro __using__(_) do
+  defmacro __using__(opts) do
+    generate_guards = Keyword.get(opts, :guards, false)
+
     quote do
       Module.register_attribute(__MODULE__, :signatures, accumulate: true)
+      @magic_bytes_generate_guards unquote(generate_guards)
       import MagicBytes.DefineSignatures, only: [defsignature: 2]
 
       @before_compile MagicBytes.DefineSignatures
