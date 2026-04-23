@@ -49,7 +49,14 @@ defmodule MagicBytes.Test.Fixtures do
     {"fixture.otf", "font/otf"},
     {"fixture.ttf", "font/ttf"},
     # Database
-    {"fixture.sqlite", "application/x-sqlite3"}
+    {"fixture.sqlite", "application/x-sqlite3"},
+    # New built-in signatures
+    {"fixture.jp2", "image/jp2"},
+    {"fixture.jxl", "image/jxl"},
+    {"fixture.flif", "image/flif"},
+    {"fixture.lz4", "application/x-lz4"},
+    {"fixture.parquet", "application/vnd.apache.parquet"},
+    {"fixture.arrow", "application/vnd.apache.arrow.file"}
   ]
 
   def all, do: @files
